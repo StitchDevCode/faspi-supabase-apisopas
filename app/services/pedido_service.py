@@ -21,6 +21,14 @@ def crear_pedido(db: Session, payload) -> Pedido:
         raise HTTPException(status_code=400, detail="MetodoPago inválido")
     if payload.cantidad <= 0:
         raise HTTPException(status_code=400, detail="Cantidad inválida")
+    if payload.es_especial and not payload.descripcion_especial:
+        raise HTTPException(
+            status_code=400,
+            detail="Descripcion especial es requerida cuando el pedido es especial"
+        )
+
+    if not payload.es_especial:
+        payload.descripcion_especial = None
 
     tipo = get_por_codigo(db, payload.tipo_sopa_codigo)
 
@@ -45,6 +53,10 @@ def crear_pedido(db: Session, payload) -> Pedido:
         total=total,
         vuelto=vuelto,
         estado="PENDIENTE",
+ 
+
+        es_especial=getattr(payload, "es_especial", False),
+        descripcion_especial=getattr(payload, "descripcion_especial", None),
     )
 
     db.add(pedido)
@@ -89,6 +101,20 @@ def actualizar_pedido(db: Session, pedido_id: str, payload) -> Pedido:
         pedido.total = total
         pedido.vuelto = vuelto
         pedido.monto_pagado = monto_final
+    # Reglas de especial (update)
+    if "es_especial" in data or "descripcion_especial" in data:
+        nuevo_es_especial = data.get("es_especial", pedido.es_especial)
+        nueva_desc = data.get("descripcion_especial", pedido.descripcion_especial)
+
+    if nuevo_es_especial and not nueva_desc:
+        raise HTTPException(
+            status_code=400,
+            detail="Descripcion especial es requerida cuando el pedido es especial"
+        )
+
+    if not nuevo_es_especial:
+        # si deja de ser especial, limpiamos la descripcion
+        data["descripcion_especial"] = None
 
     db.commit()
     db.refresh(pedido)

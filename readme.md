@@ -1,6 +1,6 @@
 Aquí tienes un `README.md` completo (cópialo tal cual). Está escrito para que lo uses como **apunte personal** y como documentación del repo.
 
-````md
+
 # Sopas API (FastAPI + SQLAlchemy + Postgres/Supabase) — Offline First
 
 API para registrar y consultar pedidos de “Sopas La Tía”, pensada para ser consumida por una app Android que trabaja **offline-first** (Room) y sincroniza cuando vuelve la conexión.

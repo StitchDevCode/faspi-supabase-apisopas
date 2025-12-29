@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import String, Integer, Float, Boolean, DateTime
+from sqlalchemy import String, Integer, Float, Boolean, DateTime, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 from typing import Optional
@@ -36,3 +36,6 @@ class Pedido(Base):
 
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    es_especial: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    descripcion_especial: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
