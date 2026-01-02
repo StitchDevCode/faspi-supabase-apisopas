@@ -30,6 +30,7 @@ class PedidoUpdate(BaseModel):
 
 class PedidoOut(BaseModel):
     id: str
+    jornada_id: str
     client_id: str | None = None
     client_request_id: str
     client_id: str | None
@@ -49,5 +50,5 @@ class PedidoOut(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+class Config:
+    from_attributes = True

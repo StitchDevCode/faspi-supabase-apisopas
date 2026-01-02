@@ -3,6 +3,7 @@ from sqlalchemy import select
 from fastapi import HTTPException
 from app.models.pedido import Pedido
 from app.services.catalogo_service import get_por_codigo
+from app.services.jornada_service import obtener_jornada_activa
 
 VALID_METODO = {"EFECTIVO", "TRANSFERENCIA"}
 VALID_ESTADO = {"PENDIENTE", "ENTREGADO", "CANCELADO"}
@@ -38,8 +39,9 @@ def crear_pedido(db: Session, payload) -> Pedido:
         pago_exacto=payload.pago_con_monto_exacto,
         monto_pagado=payload.monto_pagado,
     )
-
+    jornada = obtener_jornada_activa(db)
     pedido = Pedido(
+        jornada_id=jornada.id,
         client_request_id=payload.client_request_id,
         client_id=payload.client_id,
 
@@ -75,9 +77,9 @@ def obtener_pedido(db: Session, pedido_id: str) -> Pedido:
 
 def actualizar_pedido(db: Session, pedido_id: str, payload) -> Pedido:
     pedido = obtener_pedido(db, pedido_id)
-
     data = payload.model_dump(exclude_unset=True)
 
+    # 1) Validaciones base
     if "metodo_pago" in data and data["metodo_pago"] not in VALID_METODO:
         raise HTTPException(status_code=400, detail="MetodoPago inválido")
     if "estado" in data and data["estado"] not in VALID_ESTADO:
@@ -85,11 +87,36 @@ def actualizar_pedido(db: Session, pedido_id: str, payload) -> Pedido:
     if "cantidad" in data and data["cantidad"] <= 0:
         raise HTTPException(status_code=400, detail="Cantidad inválida")
 
-    # aplicar cambios simples
+    # 2) Reglas de ESPECIAL (sin mutar aún)
+    es_especial_actual = pedido.es_especial
+    desc_actual = pedido.descripcion_especial
+
+    # valores "finales" (si no vienen en el PATCH, se quedan como estaban)
+    nuevo_es_especial = data.get("es_especial", es_especial_actual)
+    nueva_desc = data.get("descripcion_especial", desc_actual)
+
+    # ✅ Regla: solo exigir descripción cuando:
+    # - se está ACTIVANDO es_especial (false -> true), o
+    # - se está enviando descripcion_especial en el PATCH (la estás tocando)
+    activando_especial = ("es_especial" in data) and (not es_especial_actual) and (nuevo_es_especial is True)
+    tocando_descripcion = "descripcion_especial" in data
+
+    if (activando_especial or tocando_descripcion) and (nuevo_es_especial is True):
+        if nueva_desc is None or str(nueva_desc).strip() == "":
+            raise HTTPException(
+                status_code=400,
+                detail="Descripcion especial es requerida cuando el pedido es especial"
+            )
+
+    # ✅ Si explícitamente lo marcan como NO especial, limpiamos descripción
+    if "es_especial" in data and (nuevo_es_especial is False):
+        data["descripcion_especial"] = None
+
+    # 3) Aplicar cambios simples
     for k, v in data.items():
         setattr(pedido, k, v)
 
-    # si cambió tipo/cantidad/pago, recalcular
+    # 4) Recalcular total/vuelto si cambió lo que afecta el cálculo
     if any(k in data for k in ["tipo_sopa_codigo", "cantidad", "pago_con_monto_exacto", "monto_pagado"]):
         tipo = get_por_codigo(db, pedido.tipo_sopa_codigo)
         total, vuelto, monto_final = _calcular_total_y_vuelto(
@@ -101,26 +128,20 @@ def actualizar_pedido(db: Session, pedido_id: str, payload) -> Pedido:
         pedido.total = total
         pedido.vuelto = vuelto
         pedido.monto_pagado = monto_final
-    # Reglas de especial (update)
-    if "es_especial" in data or "descripcion_especial" in data:
-        nuevo_es_especial = data.get("es_especial", pedido.es_especial)
-        nueva_desc = data.get("descripcion_especial", pedido.descripcion_especial)
-
-    if nuevo_es_especial and not nueva_desc:
-        raise HTTPException(
-            status_code=400,
-            detail="Descripcion especial es requerida cuando el pedido es especial"
-        )
-
-    if not nuevo_es_especial:
-        # si deja de ser especial, limpiamos la descripcion
-        data["descripcion_especial"] = None
 
     db.commit()
     db.refresh(pedido)
     return pedido
 
+
 def eliminar_pedido(db: Session, pedido_id: str):
     pedido = obtener_pedido(db, pedido_id)
     db.delete(pedido)
     db.commit()
+
+def listar_pedidos_de_jornada(db: Session, jornada_id: str):
+    return db.execute(
+        select(Pedido)
+        .where(Pedido.jornada_id == jornada_id, Pedido.is_deleted == False)
+        .order_by(Pedido.created_at.desc())
+    ).scalars().all()

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import String, Integer, Float, Boolean, DateTime, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import String, Integer, Float, Boolean, DateTime, Text, ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 from typing import Optional
 
@@ -39,3 +39,6 @@ class Pedido(Base):
 
     es_especial: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     descripcion_especial: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    #nuevo
+    jornada_id: Mapped[str] = mapped_column(String(36), ForeignKey("jornadas.id"), index=True)
+    jornada = relationship("Jornada", back_populates="pedidos")

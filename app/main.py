@@ -6,6 +6,10 @@ from app.models.tipo_sopa import TipoSopa
 
 from app.routers.pedido_router import router as pedido_router
 from app.routers.catalogo_router import router as catalogo_router
+from app.routers.jornada_router import router as jornada_router
+
+from app.models.pedido import Pedido
+from app.models.jornada import Jornada
 
 app = FastAPI(title="Sopas API")
 
@@ -38,3 +42,4 @@ def health():
 
 app.include_router(pedido_router)
 app.include_router(catalogo_router)
+app.include_router(jornada_router)
